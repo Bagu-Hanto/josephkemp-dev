@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Log Analyzer</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav>
+    <div class="container nav-inner">
+      <span class="nav-name"><a href="index.html" style="color:inherit;text-decoration:none;">Joseph Kemp</a></span>
+      <ul>
+        <li><a href="index.html#projects">Projects</a></li>
+        <li><a href="index.html#services">Services</a></li>
+        <li><a href="index.html#contact">Contact</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="project-hero">
+    <canvas id="log-hero-bg"></canvas>
+    <div class="log-hero-scanlines"></div>
+    <div class="log-hero-vignette"></div>
+    <div class="project-hero-overlay"></div>
+    <div class="container project-hero-content">
+      <p class="hero-label">Security · AI · NOC/SOC</p>
+      <h1>AI Log Analyzer</h1>
+      <p class="hero-sub">A SOC-style dashboard that analyzes security log data with Claude and presents threat assessments, attack chain breakdowns, and severity breakdowns — including a live cyber attack simulation.</p>
+      <div class="hero-ctas">
+        <a href="https://aisecurityloganalyzer.netlify.app" target="_blank" rel="noopener" class="btn btn-primary">View Live Site</a>
+        <a href="https://github.com/Bagu-Hanto/ai-log-analyzer" target="_blank" rel="noopener" class="btn btn-secondary"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-2px;margin-right:6px"><path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z"/></svg>View on GitHub</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- LOG HERO BACKGROUND ENGINE -->
+  <script>
+  (function () {
+    const cfg = {
+      scrollSpeed:    0.55,
+      streamOpacity:  1.05,
+      streamCount:    20,
+      showPulses:     false,
+      showFlashes:    false,
+      showBlips:      false,
+      showBars:       true,
+      showGrid:       true,
+      grainIntensity: 0.045,
+      errorRate:      1,
+    };
+
+    const C = {
+      bg0:    '#0d2e14',
+      bg1:    '#1a4a22',
+      normal: { r:100, g:200, b:100 },
+      warn:   { r:240, g:180, b:41  },
+      error:  { r:255, g:80,  b:80  },
+    };
+
+    function rgba(col, a) {
+      return `rgba(${col.r},${col.g},${col.b},${Math.max(0,Math.min(1,a))})`;
+    }
+
+    const POOL = [
+      { cls:'normal', text:'INFO  kernel: eth0 link up' },
+      { cls:'normal', text:'INFO  sshd[4821]: session opened for root' },
+      { cls:'normal', text:'INFO  cron[1200]: backup job completed' },
+      { cls:'normal', text:'INFO  systemd: nginx.service running' },
+      { cls:'normal', text:'INFO  nginx: 200 GET /api/health 12ms' },
+      { cls:'normal', text:'INFO  kernel: TCP connection established' },
+      { cls:'normal', text:'INFO  auth: publickey accepted :: deploy' },
+      { cls:'normal', text:'INFO  disk: /dev/sda1 mount OK' },
+      { cls:'normal', text:'INFO  cron: log rotation complete' },
+      { cls:'normal', text:'INFO  sshd: session closed for admin' },
+      { cls:'normal', text:'INFO  nginx: 200 POST /ingest 8ms' },
+      { cls:'normal', text:'INFO  kernel: process fork pid=9923' },
+      { cls:'normal', text:'INFO  firewall: accepted 443 from 10.0.0.1' },
+      { cls:'normal', text:'INFO  docker: container health OK' },
+      { cls:'normal', text:'INFO  postgres: checkpoint complete' },
+      { cls:'normal', text:'INFO  redis: 12043 keys evicted' },
+      { cls:'normal', text:'INFO  systemd: rsyslog.service active' },
+      { cls:'normal', text:'INFO  nginx: 304 GET /static/app.js' },
+      { cls:'normal', text:'INFO  cron[7741]: daily-report started' },
+      { cls:'normal', text:'INFO  kernel: IRQ 19 eth1 received' },
+      { cls:'warn',   text:'WARN  auth: 3 failed login attempts' },
+      { cls:'warn',   text:'WARN  disk: /var/log 91% capacity' },
+      { cls:'warn',   text:'WARN  nginx: upstream slow 4.2s' },
+      { cls:'warn',   text:'WARN  kernel: memory usage 88%' },
+      { cls:'warn',   text:'WARN  sshd: login from unusual IP' },
+      { cls:'warn',   text:'WARN  firewall: port scan 45.33.32.156' },
+      { cls:'warn',   text:'WARN  cron: job exceeded time limit' },
+      { cls:'warn',   text:'WARN  postgres: slow query 12.3s' },
+      { cls:'warn',   text:'WARN  redis: memory near threshold' },
+      { cls:'warn',   text:'WARN  docker: container restart #3' },
+      { cls:'error',  text:'ERROR auth: brute force detected' },
+      { cls:'error',  text:'ERROR kernel: OOM killer invoked' },
+      { cls:'error',  text:'ERROR disk: I/O error on /dev/sdb' },
+      { cls:'error',  text:'ERROR nginx: upstream connection failed' },
+      { cls:'error',  text:'ERROR sshd: max auth attempts exceeded' },
+      { cls:'error',  text:'ERROR postgres: deadlock detected' },
+      { cls:'error',  text:'ERROR docker: container crash pid=4492' },
+      { cls:'error',  text:'ERROR kernel: segfault at 0x00007f2a' },
+    ];
+
+    const canvas = document.getElementById('log-hero-bg');
+    const ctx    = canvas.getContext('2d');
+    let W, H;
+    let streams    = [];
+    let pulses     = [];
+    let flashLines = [];
+    let grainCanvas, grainCtx, grainFrame = 0;
+
+    function lerp(a, b, t) { return a + (b - a) * t; }
+    function randomEntry() { return { ...POOL[Math.floor(Math.random() * POOL.length)] }; }
+
+    function buildStreams() {
+      streams = [];
+      const count = cfg.streamCount;
+      for (let i = 0; i < count; i++) {
+        const depth = Math.random();
+        const fs    = lerp(13, 8, depth);
+        const speed = lerp(0.9, 0.3, depth);
+        const alpha = lerp(0.72, 0.16, depth);
+        const x     = (i / count) * W + Math.random() * (W / count * 0.6);
+        const lineH = fs * 1.7;
+        const lines = Array.from({ length: Math.ceil(H / lineH) + 4 }, randomEntry);
+        streams.push({ x, depth, fs, speed, alpha, lineH, lines, offsetY: 0 });
+      }
+    }
+
+    function resize() {
+      W = canvas.width  = canvas.offsetWidth  || canvas.parentElement.offsetWidth  || 800;
+      H = canvas.height = canvas.offsetHeight || canvas.parentElement.offsetHeight || 400;
+      buildStreams();
+    }
+    window.addEventListener('resize', resize);
+
+    const bars = Array.from({ length: 24 }, () => ({
+      label: ['CPU','MEM','IO','NET','GPU','DISK'][Math.floor(Math.random()*6)],
+      value: Math.random(), targetValue: Math.random(),
+      speed: 0.005 + Math.random() * 0.008,
+    }));
+    let barTick = 0;
+
+    function updateBars() {
+      if (!cfg.showBars) return;
+      barTick++;
+      if (barTick % 60 === 0) bars.forEach(b => { b.targetValue = Math.random(); });
+      bars.forEach(b => { b.value += (b.targetValue - b.value) * b.speed; });
+    }
+
+    function drawBars() {
+      if (!cfg.showBars) return;
+      const barH = H / bars.length;
+      const maxW = 80;
+      const x    = W - maxW - 12;
+      bars.forEach((b, i) => {
+        const y   = i * barH;
+        const col = b.value > 0.85 ? C.error : b.value > 0.65 ? C.warn : C.normal;
+        ctx.fillStyle = `rgba(62,207,142,0.04)`;
+        ctx.fillRect(x, y + barH * 0.3, maxW, barH * 0.4);
+        ctx.fillStyle = rgba(col, 0.25 + b.value * 0.2);
+        ctx.fillRect(x, y + barH * 0.3, maxW * b.value, barH * 0.4);
+        ctx.fillStyle = rgba(C.normal, 0.2);
+        ctx.font = `7px 'Courier New', monospace`;
+        ctx.fillText(b.label, x - 28, y + barH * 0.56);
+      });
+    }
+
+    function spawnPulse(x, y, col) {
+      if (!cfg.showPulses) return;
+      pulses.push({ x, y, r: 0, maxR: 180 + Math.random() * 100, col, alpha: 0.6 });
+    }
+
+    function drawPulses() {
+      pulses = pulses.filter(p => p.r < p.maxR);
+      pulses.forEach(p => {
+        p.r    += 2.2;
+        p.alpha = 0.5 * (1 - p.r / p.maxR);
+        const grad = ctx.createRadialGradient(p.x, p.y, p.r * 0.7, p.x, p.y, p.r);
+        grad.addColorStop(0, rgba(p.col, p.alpha * 0.6));
+        grad.addColorStop(1, rgba(p.col, 0));
+        ctx.fillStyle = grad;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = rgba(p.col, p.alpha);
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.stroke();
+      });
+    }
+
+    function spawnFlash(y) {
+      if (!cfg.showFlashes) return;
+      flashLines.push({ y, alpha: 0.4, decay: 0.025 });
+    }
+
+    function drawFlashes() {
+      flashLines = flashLines.filter(f => f.alpha > 0);
+      flashLines.forEach(f => {
+        const grad = ctx.createLinearGradient(0, f.y, W, f.y);
+        grad.addColorStop(0,   `rgba(255,80,80,0)`);
+        grad.addColorStop(0.3, `rgba(255,80,80,${f.alpha})`);
+        grad.addColorStop(0.7, `rgba(255,80,80,${f.alpha})`);
+        grad.addColorStop(1,   `rgba(255,80,80,0)`);
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, f.y - 1, W, 2);
+        f.alpha -= f.decay;
+      });
+    }
+
+    function drawGridLines() {
+      if (!cfg.showGrid) return;
+      for (let i = 0; i < 12; i++) {
+        const t = i / 12, y = t * H;
+        ctx.strokeStyle = `rgba(62,207,142,${0.03 * (1 - t * 0.7)})`;
+        ctx.lineWidth = 0.5;
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+      }
+    }
+
+    function drawStreams(dt) {
+      const speedMul = cfg.scrollSpeed;
+      const opMul    = cfg.streamOpacity;
+      const errRate  = cfg.errorRate;
+
+      streams.forEach(s => {
+        s.offsetY += s.speed * speedMul * dt * 0.06;
+        while (s.offsetY >= s.lineH) {
+          s.offsetY -= s.lineH;
+          s.lines.shift();
+          s.lines.push(randomEntry());
+        }
+
+        ctx.font = `${s.fs}px 'Courier New', monospace`;
+        ctx.textBaseline = 'top';
+
+        s.lines.forEach((entry, i) => {
+          const y = i * s.lineH - s.offsetY;
+          if (y < -s.lineH || y > H + s.lineH) return;
+
+          const col = entry.cls === 'error' ? C.error
+                    : entry.cls === 'warn'  ? C.warn
+                    : C.normal;
+          const a = s.alpha * opMul;
+
+          if (entry.cls !== 'normal') {
+            const bgA = entry.cls === 'error' ? 0.06 : 0.04;
+            ctx.fillStyle = rgba(col, bgA * a * 2.5);
+            ctx.fillRect(s.x - 4, y, ctx.measureText(entry.text).width + 10, s.lineH);
+          }
+
+          ctx.fillStyle = rgba(col, a);
+          ctx.fillText(entry.text, s.x, y + 1);
+
+          if (entry.cls === 'error' && y > H * 0.15 && y < H * 0.85) {
+            if (Math.random() < 0.002 * errRate) {
+              spawnPulse(s.x + 80, y + s.lineH / 2, C.error);
+              spawnFlash(y + s.lineH / 2);
+            }
+          }
+          if (entry.cls === 'warn' && Math.random() < 0.0005 * errRate) {
+            spawnPulse(s.x + 60, y + s.lineH / 2, C.warn);
+          }
+        });
+      });
+    }
+
+    function drawBackground() {
+      const grad = ctx.createLinearGradient(0, 0, W * 0.3, H);
+      grad.addColorStop(0, C.bg0);
+      grad.addColorStop(1, C.bg1);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    function initGrain() {
+      grainCanvas = document.createElement('canvas');
+      grainCanvas.width = grainCanvas.height = 256;
+      grainCtx = grainCanvas.getContext('2d');
+    }
+
+    function drawGrain() {
+      const intensity = cfg.grainIntensity;
+      if (intensity === 0) return;
+      grainFrame++;
+      if (grainFrame % 3 !== 0) return;
+      const id = grainCtx.createImageData(256, 256);
+      const d  = id.data;
+      for (let i = 0; i < d.length; i += 4) {
+        const v = Math.random() * 255;
+        d[i] = d[i+1] = d[i+2] = v;
+        d[i+3] = Math.random() * 14;
+      }
+      grainCtx.putImageData(id, 0, 0);
+      ctx.save();
+      ctx.globalAlpha = intensity;
+      ctx.fillStyle = ctx.createPattern(grainCanvas, 'repeat');
+      ctx.fillRect(0, 0, W, H);
+      ctx.restore();
+    }
+
+    let last = 0;
+    function frame(ts) {
+      const dt = Math.min(ts - last, 50);
+      last = ts;
+      drawBackground();
+      drawGridLines();
+      drawStreams(dt);
+      drawPulses();
+      drawFlashes();
+      updateBars();
+      drawBars();
+      drawGrain();
+      requestAnimationFrame(frame);
+    }
+
+    initGrain();
+    resize();
+    requestAnimationFrame(ts => { last = ts; requestAnimationFrame(frame); });
+  })();
+  </script>
+
+  <!-- CONTENT -->
+  <section>
+    <div class="container project-content">
+      <div class="project-section">
+        <h2>How it started</h2>
+        <p>Log analysis is one of those tasks that's simultaneously critical and mind-numbing. A NOC operator staring at thousands of log lines per hour will miss things — not because they're bad at their job, but because humans aren't built for that kind of pattern recognition at volume.</p>
+        <p>I wanted to build something that could do the first pass: ingest raw log data, identify what's normal, flag what's anomalous, and present it in plain language. Not a replacement for a trained analyst — a force multiplier for one.</p>
+      </div>
+
+      <div class="project-section">
+        <h2>How it works</h2>
+        <ul class="project-list">
+          <li><strong>Analysis</strong> — a Python script runs Claude against raw syslog or Windows Event Log files and outputs structured JSON</li>
+          <li><strong>Dashboard</strong> — the frontend reads that JSON and renders a full threat assessment: severity breakdown, attack chain, anomaly detection, recommended actions</li>
+          <li><strong>Simulation mode</strong> — a pre-generated cyber attack scenario plays out in real time, showing how the dashboard responds as an attack progresses</li>
+        </ul>
+        <p>Built as a portfolio demonstration of AI-assisted log triage. The analysis pipeline is functional — the frontend is the deliverable here.</p>
+      </div>
+
+      <div class="project-section">
+        <h2>Tech stack</h2>
+        <div class="stack-grid">
+          <div class="stack-item"><span class="stack-label">Backend</span><span>Python, Netlify Functions</span></div>
+          <div class="stack-item"><span class="stack-label">AI</span><span>Claude API (claude-sonnet-4-6)</span></div>
+          <div class="stack-item"><span class="stack-label">Frontend</span><span>Vanilla HTML/CSS/JS</span></div>
+          <div class="stack-item"><span class="stack-label">Deploy</span><span>Netlify</span></div>
+        </div>
+      </div>
+
+      <div class="project-section">
+        <h2>Status</h2>
+        <p>Live. The demo runs on pre-analyzed log datasets including a real-time cyber attack simulation. The backend Python analyzer runs locally against real log files — the frontend is fully deployed on Netlify.</p>
+        <p>Want a custom version for your team? <a href="index.html#contact">Get in touch.</a></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- CONTACT -->
+  <section id="contact" style="border-top: 1px solid var(--border);">
+    <div class="container contact-container">
+      <h2>Get in Touch</h2>
+      <p>Fill out the form and I'll get back to you.</p>
+      <form class="contact-form" name="contact" method="POST" data-netlify="true">
+        <input type="hidden" name="form-name" value="contact" />
+        <input type="hidden" name="page" value="log-analyzer" />
+        <div class="form-row">
+          <div class="form-group">
+            <label for="name">Name</label>
+            <input type="text" id="name" name="name" placeholder="Your name" required />
+          </div>
+          <div class="form-group">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" placeholder="your@email.com" required />
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="subject">I'm reaching out about</label>
+          <select id="subject" name="subject" required>
+            <option value="" disabled selected>Select an option</option>
+            <option value="it-role">Remote IT role opportunity</option>
+            <option value="ai-build">Custom AI build</option>
+            <option value="consulting">AI/Automation consulting</option>
+            <option value="other">Something else</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="message">Details</label>
+          <textarea id="message" name="message" rows="5" placeholder="Tell me more..." required></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">Send Message</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="container footer-inner">
+      <span class="footer-name">Joseph Kemp</span>
+      <div class="footer-links">
+        <a href="index.html">← Back to portfolio</a>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>

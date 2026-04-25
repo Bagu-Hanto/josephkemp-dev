@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>This Portfolio — How It Was Built</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav>
+    <div class="container nav-inner">
+      <span class="nav-name"><a href="index.html" style="color:inherit;text-decoration:none;">Joseph Kemp</a></span>
+      <ul>
+        <li><a href="index.html#projects">Projects</a></li>
+        <li><a href="index.html#services">Services</a></li>
+        <li><a href="index.html#contact">Contact</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="project-hero">
+    <canvas id="site-hero-bg"></canvas>
+    <div class="site-hero-scanlines"></div>
+    <div class="site-hero-vignette"></div>
+    <div class="project-hero-overlay"></div>
+    <div class="container project-hero-content">
+      <p class="hero-label">Portfolio · Static Site · Vanilla Web</p>
+      <h1>This Site</h1>
+      <p class="hero-sub">The portfolio you're looking at — built from scratch in vanilla HTML, CSS, and JavaScript. No frameworks, no build tools, no dependencies.</p>
+    </div>
+  </section>
+
+  <!-- SITE HERO CANVAS ENGINE -->
+  <script>
+  (function () {
+    const canvas = document.getElementById('site-hero-bg');
+    const ctx = canvas.getContext('2d');
+    let W, H;
+
+    const P  = (a) => `rgba(168,85,247,${Math.max(0,a)})`;  // purple
+    const PL = (a) => `rgba(210,160,255,${Math.max(0,a)})`; // light purple
+    const FONT = "'Courier New', Courier, monospace";
+
+    // Grain
+    let grainCanvas, grainCtx, grainTick = 0;
+    function initGrain() {
+      grainCanvas = document.createElement('canvas');
+      grainCanvas.width = grainCanvas.height = 256;
+      grainCtx = grainCanvas.getContext('2d');
+    }
+    function drawGrain() {
+      grainTick++;
+      if (grainTick % 3 !== 0) return;
+      const id = grainCtx.createImageData(256, 256);
+      const d  = id.data;
+      for (let i = 0; i < d.length; i += 4) { d[i]=168; d[i+1]=85; d[i+2]=247; d[i+3]=Math.random()*12; }
+      grainCtx.putImageData(id, 0, 0);
+      ctx.save(); ctx.globalAlpha = 0.035;
+      ctx.fillStyle = ctx.createPattern(grainCanvas, 'repeat');
+      ctx.fillRect(0, 0, W, H); ctx.restore();
+    }
+
+    function lerp(a, b, t) { return a + (b - a) * t; }
+    function easeInOut(t) { return t < 0.5 ? 2*t*t : -1+(4-2*t)*t; }
+
+    // Layout states: each card config is [cols, cardW fraction of content, gap fraction]
+    const LAYOUTS = [
+      { cols: 3, label: '3-column' },
+      { cols: 2, label: '2-column' },
+      { cols: 1, label: '1-column' },
+    ];
+    let layoutIdx = 0;
+    let layoutT   = 0;      // 0=settled, going to 1=transition complete
+    let layoutAge = 0;      // time spent in current layout
+    const HOLD_MS  = 3200;
+    const TRANS_MS = 900;
+
+    // Selection box — drifts between elements
+    let sel = { x:0, y:0, w:0, h:0, tx:0, ty:0, tw:0, th:0, age:0, interval:1800 };
+
+    function pickNewTarget(bx, by, bw, bh, cols) {
+      const elements = getElements(bx, by, bw, bh, cols);
+      const pick = elements[Math.floor(Math.random() * elements.length)];
+      sel.tx = pick.x - 2; sel.ty = pick.y - 2;
+      sel.tw = pick.w + 4; sel.th = pick.h + 4;
+      sel.age = 0;
+    }
+
+    function getElements(bx, by, bw, bh, cols) {
+      const PAD = bw * 0.05;
+      const cw  = bw - PAD * 2;
+      const els = [];
+      // nav
+      els.push({ x: bx+PAD, y: by+2,       w: cw,        h: bh*0.06 });
+      // hero heading
+      els.push({ x: bx+PAD, y: by+bh*0.1,  w: cw*0.65,   h: bh*0.065 });
+      // hero sub
+      els.push({ x: bx+PAD, y: by+bh*0.19, w: cw*0.5,    h: bh*0.04 });
+      // buttons
+      els.push({ x: bx+PAD, y: by+bh*0.27, w: cw*0.2,    h: bh*0.055 });
+      // cards
+      const gap   = cw * 0.03;
+      const cardW = (cw - gap * (cols-1)) / cols;
+      for (let i = 0; i < cols; i++) {
+        els.push({ x: bx+PAD+i*(cardW+gap), y: by+bh*0.42, w: cardW, h: bh*0.32 });
+      }
+      return els;
+    }
+
+    function drawBrowser(age) {
+      const PAD  = Math.min(W, H) * 0.05;
+      const bx   = PAD;
+      const by   = PAD * 0.8;
+      const bw   = W - PAD * 2;
+      const bh   = H - PAD * 1.6;
+      const R    = 6;
+      const CHRO = bh * 0.08; // chrome height
+
+      // Background
+      const grad = ctx.createRadialGradient(W*0.5,H*0.5,0,W*0.5,H*0.5,Math.hypot(W,H)*0.6);
+      grad.addColorStop(0, '#4a1e8a'); grad.addColorStop(1, '#280e50');
+      ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+
+      // Browser chrome bar
+      ctx.fillStyle = P(0.07);
+      roundRect(bx, by, bw, CHRO, R, R, 0, 0);
+      ctx.fill();
+      ctx.strokeStyle = P(0.35); ctx.lineWidth = 1.5;
+      roundRect(bx, by, bw, bh, R);
+      ctx.stroke();
+
+      // Chrome separator
+      ctx.strokeStyle = P(0.3); ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(bx, by+CHRO); ctx.lineTo(bx+bw, by+CHRO); ctx.stroke();
+
+      // Traffic dots
+      const dot = CHRO * 0.28;
+      const dy  = by + CHRO * 0.5;
+      [0.06,0.10,0.14].forEach((rx,i) => {
+        ctx.fillStyle = P(0.45 - i*0.1);
+        ctx.beginPath(); ctx.arc(bx + bw*rx, dy, dot, 0, Math.PI*2); ctx.fill();
+      });
+
+      // URL bar
+      const ux = bx + bw*0.25, uy = by + CHRO*0.18, uw = bw*0.5, uh = CHRO*0.62;
+      ctx.strokeStyle = P(0.25); ctx.lineWidth = 0.8;
+      roundRect(ux, uy, uw, uh, 3); ctx.stroke();
+      ctx.fillStyle = P(0.06); roundRect(ux, uy, uw, uh, 3); ctx.fill();
+      ctx.fillStyle = PL(0.4);
+      ctx.font = `${CHRO*0.32}px ${FONT}`;
+      ctx.textBaseline = 'middle';
+      ctx.fillText('josephkemp.netlify.app', ux + 8, uy + uh*0.5);
+
+      // Content area
+      const cx = bx;
+      const cy = by + CHRO;
+      const cw = bw;
+      const ch = bh - CHRO;
+
+      // Clip content
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(cx+1, cy+1, cw-2, ch-2);
+      ctx.clip();
+
+      drawContent(cx, cy, cw, ch, age);
+
+      ctx.restore();
+
+      // Selection box
+      sel.age += 16;
+      if (sel.age > sel.interval || (sel.tw === 0)) {
+        pickNewTarget(cx, cy, cw, ch, getCurrentCols());
+        sel.interval = 1200 + Math.random() * 1600;
+      }
+      const st = Math.min(1, sel.age / 220);
+      sel.x = lerp(sel.x, sel.tx, st * 0.18);
+      sel.y = lerp(sel.y, sel.ty, st * 0.18);
+      sel.w = lerp(sel.w, sel.tw, st * 0.18);
+      sel.h = lerp(sel.h, sel.th, st * 0.18);
+
+      ctx.strokeStyle = PL(0.65);
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 3]);
+      ctx.strokeRect(sel.x, sel.y, sel.w, sel.h);
+      ctx.setLineDash([]);
+
+      // Corner handles
+      const hs = 4;
+      ctx.fillStyle = PL(0.8);
+      [[sel.x,sel.y],[sel.x+sel.w,sel.y],[sel.x,sel.y+sel.h],[sel.x+sel.w,sel.y+sel.h]].forEach(([hx,hy]) => {
+        ctx.fillRect(hx-hs/2, hy-hs/2, hs, hs);
+      });
+
+      // Layout label (bottom right of chrome)
+      ctx.fillStyle = P(0.35);
+      ctx.font = `${CHRO*0.28}px ${FONT}`;
+      ctx.textBaseline = 'middle';
+      ctx.textAlign = 'right';
+      ctx.fillText(LAYOUTS[layoutIdx].label, bx+bw-12, by+CHRO*0.5);
+      ctx.textAlign = 'left';
+    }
+
+    function getCurrentCols() {
+      const next = (layoutIdx + 1) % LAYOUTS.length;
+      return layoutT > 0.5 ? LAYOUTS[next].cols : LAYOUTS[layoutIdx].cols;
+    }
+
+    function drawContent(cx, cy, cw, ch, age) {
+      const PAD  = cw * 0.05;
+      const iw   = cw - PAD * 2;
+      const ix   = cx + PAD;
+
+      const curCols  = LAYOUTS[layoutIdx].cols;
+      const nextCols = LAYOUTS[(layoutIdx+1) % LAYOUTS.length].cols;
+      const t        = easeInOut(layoutT);
+
+      function lerpCols(cur, nxt) { return lerp(cur, nxt, t); }
+
+      // Nav bar
+      wire(ix, cy+ch*0.02, iw, ch*0.055, 0.12, 0.3);
+      wire(ix, cy+ch*0.02, iw*0.22, ch*0.055, 0, 0.22);
+      wire(ix+iw*0.65, cy+ch*0.025, iw*0.08, ch*0.04, 0, 0.18);
+      wire(ix+iw*0.75, cy+ch*0.025, iw*0.08, ch*0.04, 0, 0.18);
+      wire(ix+iw*0.86, cy+ch*0.025, iw*0.12, ch*0.04, 0.08, 0.3);
+
+      // Hero heading
+      wire(ix, cy+ch*0.11, lerpCols(iw*0.6, iw*0.75), ch*0.055, 0, 0.55);
+      wire(ix, cy+ch*0.18, lerpCols(iw*0.45, iw*0.6), ch*0.035, 0, 0.3);
+      wire(ix, cy+ch*0.23, lerpCols(iw*0.35, iw*0.5), ch*0.03,  0, 0.22);
+
+      // Buttons
+      wire(ix,           cy+ch*0.30, iw*0.18, ch*0.05, 0.18, 0.55);
+      wire(ix+iw*0.21,   cy+ch*0.30, iw*0.16, ch*0.05, 0,    0.28);
+
+      // Cards
+      const gap    = iw * 0.03;
+      const curW   = (iw - gap*(curCols-1))  / curCols;
+      const nextW  = (iw - gap*(nextCols-1)) / nextCols;
+      const maxCols = Math.max(curCols, nextCols);
+
+      for (let i = 0; i < maxCols; i++) {
+        const curX  = i < curCols  ? ix + i*(curW+gap)   : ix + (curCols-1)*(curW+gap);
+        const nextX = i < nextCols ? ix + i*(nextW+gap)  : ix + (nextCols-1)*(nextW+gap);
+        const curCW  = i < curCols  ? curW  : 0;
+        const nextCW = i < nextCols ? nextW : 0;
+        const rx = lerp(curX, nextX, t);
+        const rw = lerp(curCW, nextCW, t);
+        const ry = cy + ch * 0.41;
+        const rh = ch * 0.33;
+        if (rw < 2) continue;
+        wire(rx, ry, rw, rh, 0.06, 0.22);
+        wire(rx, ry, rw, rh*0.12, 0, 0.2);
+        wline(rx+rw*0.08, ry+rh*0.22, rx+rw*0.85, ry+rh*0.22, 0.3);
+        wline(rx+rw*0.08, ry+rh*0.33, rx+rw*0.70, ry+rh*0.33, 0.18);
+        wline(rx+rw*0.08, ry+rh*0.42, rx+rw*0.78, ry+rh*0.42, 0.14);
+      }
+
+      // Footer
+      wire(cx, cy+ch*0.92, cw, ch*0.08, 0.06, 0.15);
+    }
+
+    function wire(x, y, w, h, fill, stroke) {
+      if (fill > 0) { ctx.fillStyle = P(fill);   ctx.fillRect(x, y, w, h); }
+      if (stroke > 0) { ctx.strokeStyle = P(stroke); ctx.lineWidth = 0.8; ctx.strokeRect(x, y, w, h); }
+    }
+    function wline(x1, y1, x2, y2, alpha) {
+      ctx.strokeStyle = P(alpha); ctx.lineWidth = 0.8;
+      ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+    }
+    function roundRect(x, y, w, h, tl, tr, br, bl) {
+      tr = tr ?? tl; br = br ?? tl; bl = bl ?? tl;
+      ctx.beginPath();
+      ctx.moveTo(x+tl, y);
+      ctx.lineTo(x+w-tr, y); ctx.quadraticCurveTo(x+w,y, x+w,y+tr);
+      ctx.lineTo(x+w, y+h-br); ctx.quadraticCurveTo(x+w,y+h, x+w-br,y+h);
+      ctx.lineTo(x+bl, y+h); ctx.quadraticCurveTo(x,y+h, x,y+h-bl);
+      ctx.lineTo(x, y+tl); ctx.quadraticCurveTo(x,y, x+tl,y);
+      ctx.closePath();
+    }
+
+    function resize() {
+      W = canvas.width  = canvas.offsetWidth  || 800;
+      H = canvas.height = canvas.offsetHeight || 400;
+    }
+    window.addEventListener('resize', resize);
+
+    let last = 0;
+    function frame(ts) {
+      const dt = Math.min(ts - last, 50); last = ts;
+
+      if (layoutT === 0) {
+        layoutAge += dt;
+        if (layoutAge > HOLD_MS) { layoutAge = 0; layoutT = 0.001; }
+      } else {
+        layoutT += dt / TRANS_MS;
+        if (layoutT >= 1) {
+          layoutT = 0;
+          layoutIdx = (layoutIdx + 1) % LAYOUTS.length;
+        }
+      }
+
+      drawBrowser(ts);
+      drawGrain();
+      requestAnimationFrame(frame);
+    }
+
+    initGrain(); resize();
+    requestAnimationFrame(ts => { last = ts; requestAnimationFrame(frame); });
+  })();
+  </script>
+
+  <!-- CONTENT -->
+  <section>
+    <div class="container project-content">
+
+      <div class="project-section">
+        <h2>How it started</h2>
+        <p>I needed a portfolio live before April 18 — the date I planned to go live on LinkedIn and X. I had a week. The constraint was useful: no frameworks, no overthinking, just ship something that looks good and represents the work accurately.</p>
+        <p>I built it the same way I build everything else — with RIGGS as the execution layer. Designed in conversation, iterated in real time, deployed to Netlify. The whole site went from blank file to live in a single focused work session.</p>
+      </div>
+
+      <div class="project-section">
+        <h2>What's in it</h2>
+        <ul class="project-list">
+          <li><strong>Particle network hero</strong> — canvas-based animation, 100 nodes, custom color system via CSS properties</li>
+          <li><strong>Animated project cards</strong> — inline SVGs with CSS animations: CPU chip TX/RX streams, live log feed, radar sweep with angle-synced blip pulses</li>
+          <li><strong>Dark mode</strong> — CSS custom properties throughout, consistent across all pages</li>
+          <li><strong>Project detail pages</strong> — each project gets its own page with origin story, how it works, and tech stack</li>
+          <li><strong>Netlify Forms</strong> — contact form with intent dropdown, no backend required</li>
+          <li><strong>Mobile responsive</strong> — grid layouts collapse cleanly on small screens</li>
+        </ul>
+      </div>
+
+      <div class="project-section">
+        <h2>Technical decisions</h2>
+        <p>No frameworks was a deliberate choice. React or Next.js would've added setup time, build complexity, and dependencies for a site that doesn't need any of them. Vanilla HTML/CSS/JS ships instantly, loads fast, and has no supply chain risk.</p>
+        <p>All card visuals are inline SVG — no image files, no external assets, styled via CSS custom properties. The radar and chip animations run entirely in CSS. The particle network and log feed are small, self-contained JS functions.</p>
+      </div>
+
+      <div class="project-section">
+        <h2>Tech stack</h2>
+        <div class="stack-grid">
+          <div class="stack-item"><span class="stack-label">Frontend</span><span>Vanilla HTML, CSS, JavaScript</span></div>
+          <div class="stack-item"><span class="stack-label">Visuals</span><span>Inline SVG, CSS animations, Canvas API</span></div>
+          <div class="stack-item"><span class="stack-label">Forms</span><span>Netlify Forms</span></div>
+          <div class="stack-item"><span class="stack-label">Deploy</span><span>Netlify (CD from GitHub)</span></div>
+          <div class="stack-item"><span class="stack-label">Built with</span><span>RIGGS (Claude Code)</span></div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- CONTACT -->
+  <section id="contact" style="border-top: 1px solid var(--border);">
+    <div class="container contact-container">
+      <h2>Get in Touch</h2>
+      <p>Fill out the form and I'll get back to you.</p>
+      <form class="contact-form" name="contact" method="POST" data-netlify="true">
+        <input type="hidden" name="form-name" value="contact" />
+        <input type="hidden" name="page" value="this-site" />
+        <div class="form-row">
+          <div class="form-group">
+            <label for="name">Name</label>
+            <input type="text" id="name" name="name" placeholder="Your name" required />
+          </div>
+          <div class="form-group">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" placeholder="your@email.com" required />
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="subject">I'm reaching out about</label>
+          <select id="subject" name="subject" required>
+            <option value="" disabled selected>Select an option</option>
+            <option value="it-role">Remote IT role opportunity</option>
+            <option value="ai-build">Custom AI build</option>
+            <option value="consulting">AI/Automation consulting</option>
+            <option value="other">Something else</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="message">Details</label>
+          <textarea id="message" name="message" rows="5" placeholder="Tell me more..." required></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">Send Message</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="container footer-inner">
+      <span class="footer-name">Joseph Kemp</span>
+      <div class="footer-links">
+        <a href="index.html">← Back to portfolio</a>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>

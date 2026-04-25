@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Job Search Bot</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav>
+    <div class="container nav-inner">
+      <span class="nav-name"><a href="index.html" style="color:inherit;text-decoration:none;">Joseph Kemp</a></span>
+      <ul>
+        <li><a href="index.html#projects">Projects</a></li>
+        <li><a href="index.html#services">Services</a></li>
+        <li><a href="index.html#contact">Contact</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="project-hero">
+    <canvas id="jsb-hero-bg"></canvas>
+    <div class="jsb-hero-scanlines"></div>
+    <div class="jsb-hero-vignette"></div>
+    <div class="project-hero-overlay"></div>
+    <div class="container project-hero-content">
+      <p class="hero-label">Automation · AI · Job Search</p>
+      <h1>Job Search Bot</h1>
+      <p class="hero-sub">A multi-board job scraper that scores listings against a career profile and outputs a ranked daily dashboard — built to eliminate the manual grind of job hunting.</p>
+      <div class="hero-ctas">
+        <span class="badge-inline planned">Planned</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- JSB HERO BACKGROUND ENGINE -->
+  <script>
+/* ═══════════════════════════════════════════════════════════════════
+   JOB SEARCH BOT — LIDAR TERRAIN HERO BACKGROUND
+   Aerial sonar scan revealing procedural canyon terrain.
+   ═══════════════════════════════════════════════════════════════════ */
+(function () {
+
+  const GRID_RES       = 180;
+  const NUM_LEVELS     = 16;
+  const PULSE_DURATION = 6200;
+  const CLOUD_COUNT    = 200;
+  const GREEN          = [50, 238, 150];
+  const GREEN_LEAD     = [148, 255, 218];
+
+  function g(a)  { return `rgba(${GREEN[0]},${GREEN[1]},${GREEN[2]},${Math.max(0,a)})`; }
+  function gl(a) { return `rgba(${GREEN_LEAD[0]},${GREEN_LEAD[1]},${GREEN_LEAD[2]},${Math.max(0,a)})`; }
+
+  const canvas = document.getElementById('jsb-hero-bg');
+  const ctx    = canvas.getContext('2d');
+  let W, H, maxRadius, pulseSource, pulseSpeed;
+  let segments = [], cloudPoints = [];
+  let pulseAge = 0;
+
+  function fbm(x, y) {
+    let h = 0, amp = 0.5, fx = x, fy = y;
+    h += amp * Math.sin(fx*2.1+fy*1.3) * Math.cos(fx*1.7-fy*2.4); amp *= 0.52; fx*=2.1; fy*=2.1;
+    h += amp * Math.sin(fx*2.1+fy*1.3) * Math.cos(fx*1.7-fy*2.4); amp *= 0.52; fx*=2.1; fy*=2.1;
+    h += amp * Math.sin(fx*2.1+fy*1.3) * Math.cos(fx*1.7-fy*2.4); amp *= 0.52; fx*=2.1; fy*=2.1;
+    h += amp * Math.sin(fx*2.1+fy*1.3) * Math.cos(fx*1.7-fy*2.4); amp *= 0.52; fx*=2.1; fy*=2.1;
+    h += amp * Math.sin(fx*2.1+fy*1.3) * Math.cos(fx*1.7-fy*2.4);
+    return h;
+  }
+
+  function terrainHeight(nx, ny) {
+    const dx = 0.55 * fbm(nx * 1.4 + 1.7, ny * 1.4 + 9.2);
+    const dy = 0.55 * fbm(nx * 1.4 + 8.3, ny * 1.4 + 2.8);
+    let h = fbm(nx + dx, ny + dy);
+    const steps = 7;
+    const stepped = Math.round(h * steps) / steps;
+    h = h * 0.35 + stepped * 0.65;
+    const rt = nx * 0.9 - ny * 0.55 + 0.08;
+    h -= 0.55 * Math.exp(-rt * rt * 10);
+    const rt2 = nx * 0.4 + ny * 0.7 - 0.5;
+    h -= 0.25 * Math.exp(-rt2 * rt2 * 18);
+    return h;
+  }
+
+  const MS = [
+    [],[[3,2]],[[1,2]],[[3,1]],[[0,1]],[[0,3],[1,2]],[[0,2]],[[0,3]],
+    [[0,3]],[[0,2]],[[0,1],[2,3]],[[0,1]],[[3,1]],[[1,2]],[[3,2]],[],
+  ];
+
+  function edgePt(e, h00, h10, h11, h01, x0, y0, x1, y1, thr) {
+    let ha, hb, ax, ay, bx, by;
+    switch(e) {
+      case 0: ha=h00;hb=h10;ax=x0;ay=y0;bx=x1;by=y0;break;
+      case 1: ha=h10;hb=h11;ax=x1;ay=y0;bx=x1;by=y1;break;
+      case 2: ha=h01;hb=h11;ax=x0;ay=y1;bx=x1;by=y1;break;
+      case 3: ha=h00;hb=h01;ax=x0;ay=y0;bx=x0;by=y1;break;
+    }
+    const t = Math.max(0, Math.min(1, (thr - ha) / (hb - ha)));
+    return [ax + t*(bx-ax), ay + t*(by-ay)];
+  }
+
+  function generateTerrain() {
+    segments    = [];
+    cloudPoints = [];
+    const G = GRID_RES;
+    const H_field = new Float32Array(G * G);
+    let hMin = Infinity, hMax = -Infinity;
+    for (let yi = 0; yi < G; yi++) {
+      for (let xi = 0; xi < G; xi++) {
+        const h = terrainHeight(xi/(G-1), yi/(G-1));
+        H_field[yi*G + xi] = h;
+        if (h < hMin) hMin = h;
+        if (h > hMax) hMax = h;
+      }
+    }
+    const hRange = hMax - hMin || 1;
+    for (let i = 0; i < H_field.length; i++) H_field[i] = (H_field[i] - hMin) / hRange;
+    const cW = W / (G-1), cH = H / (G-1);
+    for (let li = 0; li < NUM_LEVELS; li++) {
+      const thr   = (li + 0.5) / NUM_LEVELS;
+      const depth = li / (NUM_LEVELS - 1);
+      for (let yi = 0; yi < G-1; yi++) {
+        for (let xi = 0; xi < G-1; xi++) {
+          const h00 = H_field[yi*G + xi], h10 = H_field[yi*G + xi+1];
+          const h11 = H_field[(yi+1)*G + xi+1], h01 = H_field[(yi+1)*G + xi];
+          const cas = (h00>thr?8:0)|(h10>thr?4:0)|(h11>thr?2:0)|(h01>thr?1:0);
+          const pairs = MS[cas];
+          if (!pairs.length) continue;
+          const x0=xi*cW, y0=yi*cH, x1=x0+cW, y1=y0+cH;
+          for (const [e1,e2] of pairs) {
+            const [ax,ay] = edgePt(e1, h00,h10,h11,h01, x0,y0,x1,y1, thr);
+            const [bx,by] = edgePt(e2, h00,h10,h11,h01, x0,y0,x1,y1, thr);
+            const mx=(ax+bx)*0.5, my=(ay+by)*0.5;
+            const dist = Math.hypot(mx-pulseSource.x, my-pulseSource.y);
+            segments.push({ x1:ax,y1:ay,x2:bx,y2:by, dist, depth });
+          }
+        }
+      }
+    }
+    let attempts = 0;
+    while (cloudPoints.length < CLOUD_COUNT && attempts < CLOUD_COUNT * 6) {
+      attempts++;
+      const x = W * (0.03 + Math.random() * 0.94), y = H * (0.03 + Math.random() * 0.94);
+      const normH = (terrainHeight(x/W, y/H) - hMin) / hRange;
+      if (Math.random() > normH + 0.25) continue;
+      cloudPoints.push({ x, y, dist: Math.hypot(x-pulseSource.x, y-pulseSource.y),
+        size: 0.8 + normH * 2.8, brightness: 0.5 + normH * 0.5, depth: normH,
+        anomaly: Math.random() < 0.05 });
+    }
+  }
+
+  function litAlpha(dist, age, fadeDuration) {
+    const cycleAge = age % PULSE_DURATION;
+    const passTime = dist / pulseSpeed;
+    const cur = cycleAge >= passTime ? Math.max(0, 1 - (cycleAge - passTime) / fadeDuration) : 0;
+    const prevElapsed = cycleAge + PULSE_DURATION - passTime;
+    const prev = prevElapsed >= 0 ? Math.max(0, 1 - prevElapsed / fadeDuration) : 0;
+    return Math.max(cur, prev);
+  }
+
+  function pulseRadius(age) { return pulseSpeed * (age % PULSE_DURATION); }
+
+  function drawBackground() {
+    ctx.fillStyle = '#0e3a3c';
+    ctx.fillRect(0, 0, W, H);
+    const rd = ctx.createRadialGradient(pulseSource.x, pulseSource.y, 0, pulseSource.x, pulseSource.y, maxRadius * 0.55);
+    rd.addColorStop(0, 'rgba(6,22,18,0.7)'); rd.addColorStop(0.5, 'rgba(4,14,12,0.4)'); rd.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = rd; ctx.fillRect(0, 0, W, H);
+  }
+
+  function drawContours(age) {
+    for (const seg of segments) {
+      const fade = seg.depth < 0.25 ? 1800 : seg.depth < 0.55 ? 3000 : seg.depth < 0.80 ? 4200 : 5500;
+      const lit   = litAlpha(seg.dist, age, fade);
+      const base  = seg.depth > 0.72 ? 0.014 : 0;
+      const alpha = base + lit * (0.28 + seg.depth * 0.52);
+      if (alpha < 0.005) continue;
+      const haze = Math.max(0.25, 1 - seg.dist / maxRadius * 0.55);
+      ctx.strokeStyle = g(alpha * haze);
+      ctx.lineWidth   = 0.35 + seg.depth * 1.0;
+      ctx.beginPath(); ctx.moveTo(seg.x1, seg.y1); ctx.lineTo(seg.x2, seg.y2); ctx.stroke();
+    }
+  }
+
+  function drawPointCloud(age) {
+    for (const pt of cloudPoints) {
+      const fade  = 1800 + pt.depth * 3000;
+      const lit   = litAlpha(pt.dist, age, fade);
+      const alpha = lit * pt.brightness * 0.95;
+      if (alpha < 0.008) continue;
+      const haze  = Math.max(0.25, 1 - pt.dist / maxRadius * 0.45);
+      const a     = alpha * haze;
+      const isRed = pt.anomaly;
+      const fill  = isRed ? `rgba(255,80,80,${Math.max(0,a)})` : g(a);
+      const glowFn = isRed ? (ga) => `rgba(255,80,80,${Math.max(0,ga)})` : (ga) => g(ga);
+      if (lit > 0.18) {
+        const glow = ctx.createRadialGradient(pt.x, pt.y, 0, pt.x, pt.y, pt.size * 5);
+        glow.addColorStop(0, glowFn(a * (isRed ? 0.6 : 0.45))); glow.addColorStop(1, glowFn(0));
+        ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(pt.x, pt.y, pt.size * 5, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.fillStyle = fill; ctx.beginPath(); ctx.arc(pt.x, pt.y, pt.size * 0.75, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  function drawPulseRing(age) {
+    const r    = pulseRadius(age);
+    const life = 1 - r / maxRadius;
+    if (r < 2 || life < 0.01) return;
+    const trailW = Math.min(r * 0.12, 40);
+    const wake = ctx.createRadialGradient(pulseSource.x, pulseSource.y, Math.max(0, r - trailW * 2.2), pulseSource.x, pulseSource.y, r + 2);
+    wake.addColorStop(0, g(0)); wake.addColorStop(0.6, g(0.022 * life)); wake.addColorStop(0.88, g(0.06 * life)); wake.addColorStop(1, g(0));
+    ctx.fillStyle = wake;
+    ctx.beginPath(); ctx.arc(pulseSource.x, pulseSource.y, r + 2, 0, Math.PI * 2);
+    ctx.arc(pulseSource.x, pulseSource.y, Math.max(0, r - trailW * 2.2), 0, Math.PI * 2, true); ctx.fill();
+    ctx.strokeStyle = gl(0.55 * life); ctx.lineWidth = 1.0;
+    ctx.beginPath(); ctx.arc(pulseSource.x, pulseSource.y, r, 0, Math.PI * 2); ctx.stroke();
+    if (r > 30) {
+      ctx.strokeStyle = g(0.08 * life); ctx.lineWidth = 0.5;
+      ctx.beginPath(); ctx.arc(pulseSource.x, pulseSource.y, r - 14, 0, Math.PI * 2); ctx.stroke();
+    }
+    const srcAlpha = 0.4 + 0.4 * Math.abs(Math.sin(age * 0.003));
+    ctx.fillStyle = gl(srcAlpha * 0.8); ctx.beginPath(); ctx.arc(pulseSource.x, pulseSource.y, 2.5, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = g(srcAlpha * 0.4); ctx.lineWidth = 0.8;
+    ctx.beginPath(); ctx.arc(pulseSource.x, pulseSource.y, 7, 0, Math.PI * 2); ctx.stroke();
+  }
+
+  let grainOffscreen, grainCtx2d, grainTick = 0;
+
+  function initGrain() {
+    grainOffscreen = document.createElement('canvas');
+    grainOffscreen.width = grainOffscreen.height = 256;
+    grainCtx2d = grainOffscreen.getContext('2d');
+  }
+
+  function drawGrain() {
+    grainTick++;
+    if (grainTick % 4 !== 0) return;
+    const id = grainCtx2d.createImageData(256, 256);
+    const d  = id.data;
+    for (let i = 0; i < d.length; i += 4) { const v = Math.random() * 255; d[i]=d[i+1]=d[i+2]=v; d[i+3]=Math.random()*10; }
+    grainCtx2d.putImageData(id, 0, 0);
+    ctx.save(); ctx.globalAlpha = 0.03;
+    ctx.fillStyle = ctx.createPattern(grainOffscreen, 'repeat');
+    ctx.fillRect(0, 0, W, H); ctx.restore();
+  }
+
+  let last = 0;
+
+  function frame(ts) {
+    const dt = Math.min(ts - last, 50); last = ts; pulseAge += dt;
+    drawBackground(); drawContours(pulseAge); drawPointCloud(pulseAge); drawPulseRing(pulseAge); drawGrain();
+    requestAnimationFrame(frame);
+  }
+
+  function init() {
+    W = canvas.width  = canvas.offsetWidth  || window.innerWidth;
+    H = canvas.height = canvas.offsetHeight || window.innerHeight;
+    maxRadius   = Math.hypot(W, H);
+    pulseSource = { x: W * 0.41, y: H * 0.46 };
+    pulseSpeed  = maxRadius / PULSE_DURATION;
+    generateTerrain();
+  }
+
+  window.addEventListener('resize', () => { init(); pulseAge = 0; });
+  initGrain();
+  init();
+  requestAnimationFrame(ts => { last = ts; requestAnimationFrame(frame); });
+
+})();
+  </script>
+
+  <!-- CONTENT -->
+  <section>
+    <div class="container project-content">
+      <div class="project-section">
+        <h2>How it started</h2>
+        <p>Job searching manually is a full-time job in itself. Checking five different boards every morning, reading descriptions to figure out if they're worth applying to, tracking what you've already seen — it compounds fast.</p>
+        <p>I'm building this because I need it. The goal is a system that does the scouting work automatically: find the listings, score them against my actual profile, and hand me a ranked list of the ones worth pursuing. Daily, automated, no manual searching required.</p>
+      </div>
+
+      <div class="project-section">
+        <h2>How it will work</h2>
+        <ul class="project-list">
+          <li><strong>Scraper</strong> — pulls listings from multiple job boards on a daily schedule</li>
+          <li><strong>Scoring</strong> — Claude compares each listing against a career profile and scores fit 0–100</li>
+          <li><strong>Dashboard</strong> — ranked HTML output: title, company, score, key match reasons, apply link</li>
+          <li><strong>Filters</strong> — remote-only, salary range, role type — configurable per run</li>
+          <li><strong>Deduplication</strong> — tracks seen listings so you only see new ones each day</li>
+        </ul>
+      </div>
+
+      <div class="project-section">
+        <h2>Tech stack</h2>
+        <div class="stack-grid">
+          <div class="stack-item"><span class="stack-label">Scraping</span><span>Python, Firecrawl</span></div>
+          <div class="stack-item"><span class="stack-label">AI</span><span>Claude API (claude-sonnet-4-6)</span></div>
+          <div class="stack-item"><span class="stack-label">Output</span><span>HTML Dashboard</span></div>
+          <div class="stack-item"><span class="stack-label">Schedule</span><span>Cron / automated daily run</span></div>
+        </div>
+      </div>
+
+      <div class="project-section">
+        <h2>Status</h2>
+        <p>Planned — build starts after the NRG Phone Bot ships. Following the build in public on X.</p>
+        <p>Follow along: <a href="https://x.com/BaguHanto" target="_blank" rel="noopener">@BaguHanto on X →</a></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- CONTACT -->
+  <section id="contact" style="border-top: 1px solid var(--border);">
+    <div class="container contact-container">
+      <h2>Get in Touch</h2>
+      <p>Fill out the form and I'll get back to you.</p>
+      <form class="contact-form" name="contact" method="POST" data-netlify="true">
+        <input type="hidden" name="form-name" value="contact" />
+        <input type="hidden" name="page" value="job-search-bot" />
+        <div class="form-row">
+          <div class="form-group">
+            <label for="name">Name</label>
+            <input type="text" id="name" name="name" placeholder="Your name" required />
+          </div>
+          <div class="form-group">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" placeholder="your@email.com" required />
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="subject">I'm reaching out about</label>
+          <select id="subject" name="subject" required>
+            <option value="" disabled selected>Select an option</option>
+            <option value="it-role">Remote IT role opportunity</option>
+            <option value="ai-build">Custom AI build</option>
+            <option value="consulting">AI/Automation consulting</option>
+            <option value="other">Something else</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="message">Details</label>
+          <textarea id="message" name="message" rows="5" placeholder="Tell me more..." required></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">Send Message</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="container footer-inner">
+      <span class="footer-name">Joseph Kemp</span>
+      <div class="footer-links">
+        <a href="index.html">← Back to portfolio</a>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>

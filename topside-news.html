@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Topside News</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav>
+    <div class="container nav-inner">
+      <span class="nav-name"><a href="index.html" style="color:inherit;text-decoration:none;">Joseph Kemp</a></span>
+      <ul>
+        <li><a href="index.html#projects">Projects</a></li>
+        <li><a href="index.html#services">Services</a></li>
+        <li><a href="index.html#contact">Contact</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="project-hero">
+    <canvas id="tsn-hero-bg"></canvas>
+    <div class="tsn-scanlines"></div>
+    <div class="tsn-vignette"></div>
+    <div class="project-hero-overlay"></div>
+    <div class="container project-hero-content">
+      <p class="hero-label">Content · Fan Site · Static Site</p>
+      <h1>Topside News</h1>
+      <p class="hero-sub">Fan site for MA5ON and HitboTC — comedy journalists covering the real news from topside Toledo in ARC Raiders. A love letter to Embark Studios, built in the retro terminal vibe Speranza would actually run on.</p>
+      <div class="hero-ctas">
+        <a href="https://topsidenews.netlify.app/" target="_blank" rel="noopener" class="btn btn-primary">View Live Site</a>
+        <a href="https://github.com/Bagu-Hanto/topside-news-bbs" target="_blank" rel="noopener" class="btn btn-secondary">View on GitHub</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- TSN HERO CANVAS ENGINE -->
+  <script>
+  (function () {
+    const canvas = document.getElementById('tsn-hero-bg');
+    const ctx = canvas.getContext('2d');
+    let W, H;
+
+    const A  = (alpha) => `rgba(255,170,0,${Math.max(0,alpha)})`;
+    const AG = (alpha) => `rgba(100,255,100,${Math.max(0,alpha)})`;
+    const FONT = "'Courier New', Courier, monospace";
+
+    const HEADLINES = [
+      { id:'#0041', date:'APR-24', text:'MA5ON SURVIVES 4TH MATRIARCH ENCOUNTER THIS WEEK' },
+      { id:'#0040', date:'APR-24', text:'HITBO CONFIRMS: NANITES DETECTED IN STELLA MONTIS' },
+      { id:'#0039', date:'APR-24', text:'RAIDER HONORS TIME OUT PROTOCOL MID-FIREFIGHT' },
+      { id:'#0038', date:'APR-23', text:'BUTT POCKET TECH: BSRC WHISTLEBLOWER SPEAKS OUT' },
+      { id:'#0037', date:'APR-23', text:'SALSA SENDOFF SPREADS TO THREE ENEMY CAMPS' },
+      { id:'#0036', date:'APR-23', text:'HAMMER THERAPY: FIELD RESULTS INCONCLUSIVE' },
+      { id:'#0035', date:'APR-22', text:'CHANNEL 5 REFUSES TO COMMENT ON NANITE CRISIS' },
+      { id:'#0034', date:'APR-22', text:'SPERANZA UPLINK: SECURE — 99.7% UPTIME' },
+      { id:'#0033', date:'APR-22', text:'MILDRED, 23, BLAMES NIGHT SHIFTS FOR APPEARANCE' },
+      { id:'#0032', date:'APR-21', text:'SPIRONZA DENIES ALL KNOWLEDGE OF OUTBREAK' },
+      { id:'#0031', date:'APR-21', text:'TOPSIDE TERMINAL RESTORED AFTER 14HR BLACKOUT' },
+      { id:'#0030', date:'APR-21', text:'IMPACT GRENADES: ARE THREE ENOUGH? MILDRED SAYS YES' },
+    ];
+
+    let rows = HEADLINES.slice(0, 8);
+    let rowTick = 0, nextHeadline = 8;
+    let cursorOn = true, cursorTick = 0;
+    let tickerX = 0;
+    const TICKER = '  //  TOP SIDE NEWS  \u00b7  GETTING TO THE BOTTOM OF THINGS UP TOP  \u00b7  SIGNAL SECURE  \u00b7  RAIDER CREDENTIALS VERIFIED  \u00b7  STAY TOPSIDE  ';
+
+    let grainCanvas, grainCtx, grainTick = 0;
+    function initGrain() {
+      grainCanvas = document.createElement('canvas');
+      grainCanvas.width = grainCanvas.height = 256;
+      grainCtx = grainCanvas.getContext('2d');
+    }
+    function drawGrain() {
+      grainTick++;
+      if (grainTick % 3 !== 0) return;
+      const id = grainCtx.createImageData(256, 256);
+      const d  = id.data;
+      for (let i = 0; i < d.length; i += 4) { d[i]=255; d[i+1]=140; d[i+2]=0; d[i+3]=Math.random()*14; }
+      grainCtx.putImageData(id, 0, 0);
+      ctx.save(); ctx.globalAlpha = 0.04;
+      ctx.fillStyle = ctx.createPattern(grainCanvas, 'repeat');
+      ctx.fillRect(0, 0, W, H); ctx.restore();
+    }
+
+    function hline(y, alpha, lw) {
+      ctx.strokeStyle = A(alpha); ctx.lineWidth = lw || 1;
+      ctx.beginPath(); ctx.moveTo(16, y); ctx.lineTo(W - 16, y); ctx.stroke();
+    }
+
+    function resize() {
+      W = canvas.width  = canvas.offsetWidth  || 800;
+      H = canvas.height = canvas.offsetHeight || 400;
+      tickerX = W;
+    }
+    window.addEventListener('resize', resize);
+
+    let last = 0;
+    function frame(ts) {
+      const dt = Math.min(ts - last, 50); last = ts;
+
+      rowTick += dt; cursorTick += dt;
+      if (rowTick > 2800) {
+        rowTick = 0;
+        rows.unshift(HEADLINES[nextHeadline % HEADLINES.length]);
+        nextHeadline++;
+        if (rows.length > 8) rows.pop();
+      }
+      if (cursorTick > 500) { cursorOn = !cursorOn; cursorTick = 0; }
+
+      const PAD   = 16;
+      const FS    = Math.max(11, Math.min(15, H * 0.033));
+      const LH    = FS * 2.1;
+      const COL1  = PAD;
+      const COL2  = PAD + W * 0.10;
+      const COL3  = W - PAD - W * 0.13;
+      const SEP1  = H * 0.13;
+      const HDR_Y = H * 0.17;
+      const SEP2  = H * 0.22;
+      const ROW0  = SEP2 + LH * 0.6;
+      const MID   = ROW0 + LH * 8.2;
+      const TICK_Y  = H - PAD * 2.5;
+      const PROMPT_Y = H - PAD * 1.2;
+
+      ctx.font = `${FS}px ${FONT}`;
+      ctx.textBaseline = 'top';
+
+      // Background
+      const grad = ctx.createRadialGradient(W*0.5, H*0.5, 0, W*0.5, H*0.5, Math.hypot(W,H)*0.55);
+      grad.addColorStop(0, '#3a2400'); grad.addColorStop(1, '#1e1200');
+      ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+
+      hline(SEP1, 0.45, 1.5); hline(SEP1+3, 0.18, 0.5);
+
+      ctx.fillStyle = A(0.4);
+      ctx.fillText('ID', COL1, HDR_Y);
+      ctx.fillText('HEADLINE', COL2, HDR_Y);
+      ctx.fillText('DATE', COL3, HDR_Y);
+
+      hline(SEP2, 0.25, 0.6);
+      ctx.strokeStyle = A(0.18); ctx.lineWidth = 0.5;
+      ctx.beginPath(); ctx.moveTo(COL2-PAD*0.6, SEP2); ctx.lineTo(COL2-PAD*0.6, MID); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(COL3-PAD*0.6, SEP2); ctx.lineTo(COL3-PAD*0.6, MID); ctx.stroke();
+
+      rows.forEach((row, i) => {
+        const y = ROW0 + i * LH;
+        const rowAlpha = Math.max(0.15, 0.75 - i * 0.08);
+        if (i === 0) { ctx.fillStyle = A(0.08); ctx.fillRect(PAD, y-LH*0.15, W-PAD*2, LH*0.85); }
+        ctx.fillStyle = i === 0 ? AG(0.75) : A(rowAlpha);
+        ctx.fillText(row.id, COL1, y);
+        ctx.fillStyle = A(rowAlpha);
+        const maxW = COL3 - COL2 - PAD;
+        let headline = row.text;
+        while (ctx.measureText(headline).width > maxW && headline.length > 0) headline = headline.slice(0,-1);
+        if (headline.length < row.text.length) headline = headline.slice(0,-3) + '...';
+        ctx.fillText(headline, COL2, y);
+        ctx.fillStyle = A(rowAlpha * 0.7);
+        ctx.fillText(row.date, COL3, y);
+      });
+
+      hline(MID, 0.28, 1);
+
+      tickerX -= dt * 0.09;
+      const tickerW = ctx.measureText(TICKER).width;
+      if (tickerX < -tickerW) tickerX += tickerW;
+      ctx.fillStyle = A(0.32);
+      ctx.fillText(TICKER + TICKER, tickerX, TICK_Y);
+
+      hline(PROMPT_Y - FS*0.8, 0.28, 1);
+      hline(PROMPT_Y - FS*0.8+2, 0.12, 0.5);
+
+      ctx.fillStyle = A(0.45);
+      ctx.fillText('>', PAD, PROMPT_Y);
+      if (cursorOn) { ctx.fillStyle = A(0.85); ctx.fillRect(PAD+FS*1.4, PROMPT_Y+1, FS*0.65, FS*0.9); }
+
+      drawGrain();
+      requestAnimationFrame(frame);
+    }
+
+    initGrain(); resize();
+    requestAnimationFrame(ts => { last = ts; requestAnimationFrame(frame); });
+  })();
+  </script>
+
+
+  <!-- CONTENT -->
+  <section>
+    <div class="container project-content">
+      <div class="project-section">
+        <h2>How it started</h2>
+        <p>Top Side News is a fan site inspired by MA5ON and HitboTC's comedy journalism adventures in ARC Raiders. These brave (or foolish?) reporters risk life and limb dodging bullets, ARCs, and very irritated raiders — all to bring you the truth about what's really happening topside in Toledo.</p>
+        <p>Catch them live on Twitch as chaos unfolds, or watch the highlights later on YouTube once they've made it back to Speranza (assuming they survive).</p>
+        <p>This site is also a little love letter to the team at Embark Studios for making a game that's genuinely brought people together in the best way possible. The retro terminal vibe felt right — seems likely this would be the bare-bones tech Speranza would be running on.</p>
+      </div>
+
+      <div class="project-section">
+        <h2>How it works</h2>
+        <ul class="project-list">
+          <li><strong>Static site architecture</strong> — structured content without a backend or CMS dependency</li>
+          <li><strong>Responsive design</strong> — layout that works across screen sizes without a framework</li>
+          <li><strong>Deployment pipeline</strong> — GitHub repo connected to Netlify for continuous deployment on push</li>
+          <li><strong>Version control discipline</strong> — real project, real commits, real history</li>
+          <li><strong>Follow-through</strong> — it's live, not abandoned mid-build</li>
+        </ul>
+      </div>
+
+      <div class="project-section">
+        <h2>Tech stack</h2>
+        <div class="stack-grid">
+          <div class="stack-item"><span class="stack-label">Frontend</span><span>HTML, CSS, JavaScript</span></div>
+          <div class="stack-item"><span class="stack-label">Hosting</span><span>Netlify</span></div>
+          <div class="stack-item"><span class="stack-label">Source control</span><span>GitHub</span></div>
+          <div class="stack-item"><span class="stack-label">Deploy</span><span>Continuous deployment via Git push</span></div>
+        </div>
+      </div>
+
+      <div class="project-section">
+        <h2>Status</h2>
+        <p>Live on Netlify, continuous deployment from GitHub. Both links are above.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- CONTACT -->
+  <section id="contact" style="border-top: 1px solid var(--border);">
+    <div class="container contact-container">
+      <h2>Get in Touch</h2>
+      <p>Fill out the form and I'll get back to you.</p>
+      <form class="contact-form" name="contact" method="POST" data-netlify="true">
+        <input type="hidden" name="form-name" value="contact" />
+        <input type="hidden" name="page" value="topside-news" />
+        <div class="form-row">
+          <div class="form-group">
+            <label for="name">Name</label>
+            <input type="text" id="name" name="name" placeholder="Your name" required />
+          </div>
+          <div class="form-group">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" placeholder="your@email.com" required />
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="subject">I'm reaching out about</label>
+          <select id="subject" name="subject" required>
+            <option value="" disabled selected>Select an option</option>
+            <option value="it-role">Remote IT role opportunity</option>
+            <option value="ai-build">Custom AI build</option>
+            <option value="consulting">AI/Automation consulting</option>
+            <option value="other">Something else</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="message">Details</label>
+          <textarea id="message" name="message" rows="5" placeholder="Tell me more..." required></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">Send Message</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="container footer-inner">
+      <span class="footer-name">Joseph Kemp</span>
+      <div class="footer-links">
+        <a href="index.html">← Back to portfolio</a>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>
