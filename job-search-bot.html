@@ -281,30 +281,31 @@
       </div>
 
       <div class="project-section">
-        <h2>How it will work</h2>
+        <h2>How it works</h2>
         <ul class="project-list">
-          <li><strong>Scraper</strong> — pulls listings from multiple job boards on a daily schedule</li>
-          <li><strong>Scoring</strong> — Claude compares each listing against a career profile and scores fit 0–100</li>
-          <li><strong>Dashboard</strong> — ranked HTML output: title, company, score, key match reasons, apply link</li>
-          <li><strong>Filters</strong> — remote-only, salary range, role type — configurable per run</li>
-          <li><strong>Deduplication</strong> — tracks seen listings so you only see new ones each day</li>
+          <li><strong>Ingest</strong> — pulls listings from RemoteOK and parses LinkedIn, Indeed, and Dice job alert emails through the Gmail MCP</li>
+          <li><strong>Auto-filter</strong> — a keyword exclusion list drops roles that aren't a fit (sales, account management, recruiter) before they reach the dashboard</li>
+          <li><strong>Scoring</strong> — Claude scores each remaining listing against a career profile as Strong, Moderate, or Weak, with a one-line reason</li>
+          <li><strong>Dashboard</strong> — sortable HTML view: score, title, company, pay, apply link, status, notes</li>
+          <li><strong>Status tracking</strong> — every listing gets a state: New, Applied, Followed Up, Interview, Closed, Out of Scope, or Filtered Out</li>
+          <li><strong>Persistence</strong> — a local server saves status and notes back to disk so the dashboard remembers everything across refreshes</li>
+          <li><strong>Deduplication</strong> — URL and fuzzy title/company matching keep the dataset clean across daily runs</li>
         </ul>
       </div>
 
       <div class="project-section">
         <h2>Tech stack</h2>
         <div class="stack-grid">
-          <div class="stack-item"><span class="stack-label">Scraping</span><span>Python, Firecrawl</span></div>
+          <div class="stack-item"><span class="stack-label">Ingest</span><span>Python, RemoteOK API, Gmail MCP</span></div>
           <div class="stack-item"><span class="stack-label">AI</span><span>Claude API (claude-sonnet-4-6)</span></div>
-          <div class="stack-item"><span class="stack-label">Output</span><span>HTML Dashboard</span></div>
-          <div class="stack-item"><span class="stack-label">Schedule</span><span>Cron / automated daily run</span></div>
+          <div class="stack-item"><span class="stack-label">Dashboard</span><span>HTML + local Python server</span></div>
+          <div class="stack-item"><span class="stack-label">Schedule</span><span>On-demand today; systemd auto-run next</span></div>
         </div>
       </div>
 
       <div class="project-section">
         <h2>Status</h2>
-        <p>Planned — build starts after the NRG Phone Bot ships. Following the build in public on X.</p>
-        <p>Follow along: <a href="https://x.com/BaguHanto" target="_blank" rel="noopener">@BaguHanto on X →</a></p>
+        <p>Active — running daily. 80+ listings ingested, 14 applications submitted to date. Iterating on freshness checks and filter rules as the dataset grows.</p>
       </div>
     </div>
   </section>
